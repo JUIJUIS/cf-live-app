@@ -332,7 +332,7 @@ td.act .sumbtn{display:block;width:100%;margin:3px 0}
 <body>
 <div class="wrap">
   <header style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-    <span style="display:flex;align-items:center;gap:10px"><span class="dot"></span><h1>เครื่องมือขายไลฟ์</h1><span style="font-size:.7rem;font-weight:700;color:var(--muted);background:#e9edf3;padding:2px 8px;border-radius:999px">v3.1.2</span></span>
+    <span style="display:flex;align-items:center;gap:10px"><span class="dot"></span><h1>เครื่องมือขายไลฟ์</h1><span style="font-size:.7rem;font-weight:700;color:var(--muted);background:#e9edf3;padding:2px 8px;border-radius:999px">v3.1.5</span></span>
     <span style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-ghost btn-sm" onclick="roundOpen()">📅 <b id="roundLabel">รอบ</b></button>
       <button class="btn btn-ghost btn-sm" onclick="syncOpen()"><span id="syncDot">⚪</span> <span id="syncLabel">ซิงค์: ปิดอยู่</span></button>
@@ -429,10 +429,14 @@ td.act .sumbtn{display:block;width:100%;margin:3px 0}
   
 
   <div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;cursor:pointer" onclick="poolToggle()">
       <label class="lbl" style="margin:0">คลังข้อมูลออเดอร์ <span style="font-weight:400;text-transform:none">(รับจากแท็บ "ก็อปชื่อ" อัตโนมัติ · สะสมได้หลายรอบไลฟ์)</span></label>
-      <span id="poolStatus" style="font-size:.78rem;color:var(--teal);font-weight:600"></span>
+      <span style="display:flex;align-items:center;gap:8px">
+        <span id="poolStatus" style="font-size:.78rem;color:var(--teal);font-weight:600"></span>
+        <button class="btn btn-ghost btn-sm" id="poolToggleBtn" onclick="event.stopPropagation();poolToggle()">▾ ซ่อน</button>
+      </span>
     </div>
+    <div id="poolBox" style="margin-top:6px">
     <textarea id="s_input" placeholder="ข้อมูลจากแท็บก็อปชื่อจะมากองที่นี่เอง (กดปุ่ม ➡ ส่งเข้าสรุปยอด)&#10;หรือพิมพ์เพิ่มเองก็ได้ บรรทัดละ 1 ชิ้น"></textarea>
     <div class="row" style="margin-top:8px">
       <button class="btn btn-teal btn-sm" onclick="savePoolBtn()">💾 บันทึกข้อมูล</button>
@@ -441,7 +445,8 @@ td.act .sumbtn{display:block;width:100%;margin:3px 0}
       <div class="sg"><label>ค่าส่ง/คน (บาท)</label><input id="defaultship" type="number" value="35" min="0"></div>
       <label class="chk-line"><input type="checkbox" id="mergeDup" checked> รวมคนที่ซ้ำเป็นแถวเดียว (ค่าส่งครั้งเดียว)</label>
     </div>
-    <div class="row">
+    </div>
+    <div class="row" style="margin-top:8px">
       <button class="btn btn-brand" onclick="sProcess()">⚡ ประมวลผล</button>
       <button class="btn btn-ghost btn-sm" onclick="sClearAll()">ล้าง</button>
     </div>
@@ -1009,19 +1014,24 @@ function sProcess(){
   const raw=document.getElementById('s_input').value;
   const merge=document.getElementById('mergeDup').checked;
   const ds=sGetShip();
+  const prevCount=people.length;
+  if(prevCount>0){
+    if(!confirm(`⚠️ ตอนนี้มีรายชื่ออยู่แล้ว ${prevCount} คนในหน้าสรุปยอด\n\nกด "ประมวลผล" จะสร้างรายชื่อใหม่ทั้งหมดจากข้อความในกล่องคลัง ณ ตอนนี้ — ถ้าข้อความในกล่องไม่ครบ (บางบรรทัดถูกลบ/รูปแบบผิด) รายชื่อเดิมที่หายไปจากข้อความจะหายจากหน้านี้ด้วย\n\nแน่ใจว่าข้อความในกล่องคลังครบถ้วนแล้ว?`))return;
+  }
   people=[];
   const byKey={};
+  const skipped=[];
 
   raw.split(/\r?\n/).forEach(line=>{
     if(!line.trim()) return;
     const cells=line.split('\t').map(c=>c.trim());
-    if(cells.length<2) return;
+    if(cells.length<2){skipped.push(line.trim());return;}
     const nc=parseNameCell(cells[0]);
-    if(!nc.name) return;
+    if(!nc.name){skipped.push(line.trim());return;}
     const item=cells[1]||'';
     const priceRaw=(cells[2]||'').replace(/[^\d]/g,'');
     const price=priceRaw?parseInt(priceRaw):0;
-    if(!item && !price) return;
+    if(!item && !price){skipped.push(line.trim());return;}
 
     const key=merge ? ('n:'+normName(nc.name)) : Symbol();
     let p=byKey[key];
@@ -1037,7 +1047,10 @@ function sProcess(){
   buildCodePanel();
   sRender();
   const multi=people.filter(p=>p.items.length>1).length;
-  sToast(`รวมได้ ${people.length} คน${multi?` (มี ${multi} คนที่มีหลายรายการ)`:''}`);
+  if(skipped.length){
+    alert(`⚠️ มี ${skipped.length} บรรทัดที่อ่านไม่ออก (รูปแบบไม่ตรง "ชื่อ[Tab]สินค้า[Tab]ราคา") เลยไม่ถูกนับเข้ารายชื่อ:\n\n${skipped.slice(0,10).map(l=>'• '+l).join('\n')}${skipped.length>10?`\n…และอีก ${skipped.length-10} บรรทัด`:''}\n\nข้อความยังอยู่ในกล่องคลังตามเดิม ลองแก้ให้เป็นรูปแบบที่ถูกต้องแล้วกดประมวลผลใหม่`);
+  }
+  sToast(`รวมได้ ${people.length} คน${multi?` (มี ${multi} คนที่มีหลายรายการ)`:''}${prevCount&&people.length<prevCount?` · ลดจากเดิม ${prevCount} คน`:''}`);
 }
 
 /* ── image codes ── */
@@ -1330,7 +1343,7 @@ async function copyCardBtn(btn){
 
 
 /* ── misc ── */
-function sClearAll(){document.getElementById('s_input').value='';people=[];codes={};shipOv={};saveShipOv();paid={};savePaid();sRender();document.getElementById('imgCard').style.display='none';}
+function sClearAll(){if(!confirm('⚠️ ล้างข้อมูลทั้งหมดในรอบนี้?\n\nจะลบชื่อลูกค้า รายการสินค้า สถานะจ่ายเงิน ค่าส่งที่ปรับไว้ ทิ้งทั้งหมด — กู้คืนไม่ได้\n\nถ้าจะเก็บไว้ก่อน กด "ยกเลิก" แล้วก็อปข้อความในกล่องเก็บไว้ที่อื่นก่อน'))return;document.getElementById('s_input').value='';people=[];codes={};shipOv={};saveShipOv();paid={};savePaid();sRender();document.getElementById('imgCard').style.display='none';sToast('ล้างข้อมูลแล้ว');}
 let sToastT;
 function sToast(m){const t=document.getElementById('s_toast');t.textContent=m;t.classList.add('show');clearTimeout(sToastT);sToastT=setTimeout(()=>t.classList.remove('show'),3200);}
 
@@ -1517,6 +1530,13 @@ function savePool(){
   }catch(e){}
 }
 function savePoolBtn(){savePool();sToast('บันทึกข้อมูลออเดอร์แล้ว 💾 ปิด-เปิดใหม่ข้อมูลยังอยู่');}
+let poolOpen=localStorage.getItem('cfapp_poolOpen')==='1';
+function poolApply(){
+  document.getElementById('poolBox').style.display=poolOpen?'block':'none';
+  document.getElementById('poolToggleBtn').textContent=poolOpen?'▴ ซ่อน':'▾ แสดง';
+}
+function poolToggle(){poolOpen=!poolOpen;localStorage.setItem('cfapp_poolOpen',poolOpen?'1':'0');poolApply();}
+poolApply();
 document.getElementById('s_input').addEventListener('input',savePool);
 const _sClearAll=sClearAll;
 sClearAll=function(){_sClearAll();try{localStorage.removeItem(LS_POOL);}catch(e){}};
