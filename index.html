@@ -168,6 +168,10 @@ td.name a:hover{text-decoration:underline}
 td.items{white-space:normal}
 .itline{display:flex;align-items:center;gap:9px;padding:2px 0}
 .itline+.itline{border-top:1px dashed #eef1f5}
+.itdel{margin-left:auto;flex:none;border:none;background:transparent;color:#c4cad4;font-size:.82rem;padding:2px 6px;border-radius:6px;cursor:pointer;opacity:0;transition:opacity .12s}
+.itline:hover .itdel{opacity:1}
+.itdel:hover{background:#fbe3e0;color:#c0392b}
+@media (hover:none){.itdel{opacity:.55}}
 .itpic{width:38px;height:38px;flex:none;display:flex;align-items:center;justify-content:center}
 .itpic img{width:38px;height:38px;object-fit:cover;border-radius:7px;border:1px solid var(--line)}
 .itpic .nopic{color:#d5dbe4;font-size:1rem}
@@ -332,7 +336,7 @@ td.act .sumbtn{display:block;width:100%;margin:3px 0}
 <body>
 <div class="wrap">
   <header style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-    <span style="display:flex;align-items:center;gap:10px"><span class="dot"></span><h1>เครื่องมือขายไลฟ์</h1><span style="font-size:.7rem;font-weight:700;color:var(--muted);background:#e9edf3;padding:2px 8px;border-radius:999px">v3.1.6</span></span>
+    <span style="display:flex;align-items:center;gap:10px"><span class="dot"></span><h1>เครื่องมือขายไลฟ์</h1><span style="font-size:.7rem;font-weight:700;color:var(--muted);background:#e9edf3;padding:2px 8px;border-radius:999px">v3.2</span></span>
     <span style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-ghost btn-sm" onclick="roundOpen()">📅 <b id="roundLabel">รอบ</b></button>
       <button class="btn btn-ghost btn-sm" onclick="syncOpen()"><span id="syncDot">⚪</span> <span id="syncLabel">ซิงค์: ปิดอยู่</span></button>
@@ -1115,8 +1119,8 @@ function sRender(){
     <tr>
       <td class="num">${people.indexOf(p)+1}</td>
       <td class="name">${p.url?`<a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a>`:esc(p.name)}<button class="namecopy" id="ncopy-${i}" onclick="sCopyName(${i})" title="ก็อปชื่อลูกค้า">📋</button>${p.items.length>1?`<span class="multi-tag">${p.items.length} รายการ</span>`:''}</td>
-      <td class="items">${p.items.map(it=>`
-        <div class="itline"><span class="itpic" data-code="${esc(itemCode(it.name))}"></span><span class="ittext">${esc(it.name)}</span></div>`).join('')}</td>
+      <td class="items">${p.items.map((it,j)=>`
+        <div class="itline"><span class="itpic" data-code="${esc(itemCode(it.name))}"></span><span class="ittext">${esc(it.name)}</span><button class="itdel" onclick="sDeleteItem(${people.indexOf(p)},${j})" title="ลบรายการนี้">🗑</button></div>`).join('')}</td>
       <td class="price">${fmtN(itemsSum(p))}</td>
       <td class="ship"><input type="number" value="${p.ship}" min="0" oninput="updShip(${i},this.value)"></td>
       <td class="total" id="ptotal-${i}">${fmtN(personTotal(p))}</td>
@@ -1174,6 +1178,39 @@ function removeFromPool(name){
     return normName(parseNameCell(cells[0]).name)!==target;
   }).join('\n');
   savePool();
+}
+function removeOneItemFromPool(name,itemName,price){
+  const box=document.getElementById('s_input');
+  const target=normName(name);
+  const tItem=normName(itemName);
+  let done=false;
+  const lines=box.value.split(/\r?\n/).filter(line=>{
+    if(done||!line.trim())return true;
+    const cells=line.split('\t').map(c=>c.trim());
+    if(normName(parseNameCell(cells[0]).name)!==target)return true;
+    const lItem=normName(cells[1]||'');
+    const lPrice=parseInt((cells[2]||'').replace(/[^\d]/g,''))||0;
+    if(lItem===tItem && lPrice===(price||0)){done=true;return false;}
+    return true;
+  });
+  box.value=lines.join('\n');
+  savePool();
+  return done;
+}
+function sDeleteItem(pi,ii){
+  const p=people[pi]; if(!p||!p.items[ii])return;
+  const it=p.items[ii];
+  if(p.items.length<=1){
+    if(confirm(`"${it.name||'รายการนี้'}" เป็นสินค้าชิ้นสุดท้ายของ "${p.name}" — ลบแล้วจะเหลือออเดอร์เปล่า\n\nลบทั้งออเดอร์ของ "${p.name}" ไปเลยแทนไหม?`)){
+      sDeletePerson(people.indexOf(p));
+    }
+    return;
+  }
+  if(!confirm(`ลบรายการ "${it.name||'(ไม่มีชื่อ)'}" ${it.price?fmtN(it.price)+'฿':''} ออกจากออเดอร์ของ "${p.name}"?`))return;
+  removeOneItemFromPool(p.name,it.name,it.price);
+  p.items.splice(ii,1);
+  sRender();
+  sToast('ลบรายการแล้ว ✓');
 }
 function sDeletePerson(i){
   const p=sP(i); if(!p)return;
@@ -2062,9 +2099,10 @@ function sendToSummary(){
   const glue=box.value&&!box.value.endsWith('\n')?'\n':'';
   box.value+=glue+lines.join('\n')+'\n';
   savePool();
-  showTab(2);
   sProcess({silent:true});
-  sToast(`รับมา ${sel.length} คนจากแท็บก็อปชื่อ รวมกับของเดิมแล้ว ✓`);
+  const b2=document.getElementById('tbadge2');
+  if(b2){b2.textContent=String(sel.length);b2.style.display='inline-block';}
+  sToast(`รับมา ${sel.length} คนจากแท็บก็อปชื่อ รวมกับของเดิมแล้ว ✓ (ดูได้ที่แท็บ 🧾 สรุปยอด)`);
 }
 </script>
 </body>
