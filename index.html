@@ -187,6 +187,7 @@ td.items{white-space:normal}
 .delbtn:hover{background:var(--brand-soft)!important;border-color:var(--brand)!important}
 .delx:hover{border-color:var(--brand);background:var(--brand-soft)}
 .multi-tag{display:inline-block;background:var(--brand-soft);color:var(--brand);font-size:.72rem;font-weight:700;padding:1px 8px;border-radius:999px;margin-left:6px;vertical-align:1px}
+.amtwarn{display:block;font-size:.72rem;font-weight:700;color:#c0392b;background:#fbe3e0;padding:2px 8px;border-radius:7px;margin-top:5px;text-align:center}
 td.price,td.total{font-family:"IBM Plex Mono",monospace;text-align:right;font-weight:600}
 td.total{color:var(--brand)}
 td.ship input{width:64px;border:1px solid var(--line);border-radius:7px;padding:4px 6px;font:inherit;font-size:.86rem;text-align:center}
@@ -336,7 +337,7 @@ td.act .sumbtn{display:block;width:100%;margin:3px 0}
 <body>
 <div class="wrap">
   <header style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-    <span style="display:flex;align-items:center;gap:10px"><span class="dot"></span><h1>เครื่องมือขายไลฟ์</h1><span style="font-size:.7rem;font-weight:700;color:var(--muted);background:#e9edf3;padding:2px 8px;border-radius:999px">v3.3</span></span>
+    <span style="display:flex;align-items:center;gap:10px"><span class="dot"></span><h1>เครื่องมือขายไลฟ์</h1><span style="font-size:.7rem;font-weight:700;color:var(--muted);background:#e9edf3;padding:2px 8px;border-radius:999px">v3.6</span></span>
     <span style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-ghost btn-sm" onclick="roundOpen()">📅 <b id="roundLabel">รอบ</b></button>
       <button class="btn btn-ghost btn-sm" onclick="syncOpen()"><span id="syncDot">⚪</span> <span id="syncLabel">ซิงค์: ปิดอยู่</span></button>
@@ -453,8 +454,8 @@ td.act .sumbtn{display:block;width:100%;margin:3px 0}
       <button class="btn btn-ghost btn-sm" onclick="const b=document.getElementById('sImportBox');b.style.display=b.style.display==='none'?'block':'none'">⬇ นำเข้าจาก Google ชีต</button>
     </div>
     <div id="sImportBox" style="display:none;border-top:1px dashed var(--line);margin-top:10px;padding-top:10px">
-      <label class="lbl">วางข้อมูลจากชีต <span style="font-weight:400;text-transform:none">— ลากคลุมทั้งแถว (มีคอลัมน์รูปแทรกอยู่ก็ได้ ระบบข้ามให้เอง) แล้วก็อปวางทั้งก้อน จะไปต่อท้ายข้อมูลเดิมเสมอ ไม่ทับของเก่า</span></label>
-      <textarea id="sImportText" style="min-height:120px;font-size:.85rem;font-family:'IBM Plex Mono',monospace" placeholder="อธิษฐา ผงตระกูล		รร1 เสื้อยืดสกรีนPatagonia-ขาว S.120	129&#10;Yada Pit		รร1 เสื้อยืดสกรีนPatagonia-ขาว S.130	129"></textarea>
+      <label class="lbl">วางข้อมูลจากชีต <span style="font-weight:400;text-transform:none">— ลากคลุมทั้งแถว (มีคอลัมน์รูปแทรกอยู่ก็ได้ ระบบข้ามให้เอง) แล้วก็อปวางทั้งก้อน จะไปต่อท้ายข้อมูลเดิมเสมอ ไม่ทับของเก่า · ถ้ามีคอลัมน์ลิงก์โปรไฟล์ลูกค้า (พิมพ์ https:// เต็มๆ) ก็ลากมาด้วยได้ ชื่อจะกลายเป็นลิงก์ให้อัตโนมัติ</span></label>
+      <textarea id="sImportText" style="min-height:120px;font-size:.85rem;font-family:'IBM Plex Mono',monospace" placeholder="อธิษฐา ผงตระกูล	https://www.facebook.com/...	รร1 เสื้อยืดสกรีนPatagonia-ขาว S.120	129&#10;Yada Pit	https://www.facebook.com/...	รร1 เสื้อยืดสกรีนPatagonia-ขาว S.130	129"></textarea>
       <div class="row" style="margin-top:8px"><button class="btn btn-teal btn-sm" onclick="sImportSheet()">✓ นำเข้าและรวมกับของเดิม</button></div>
     </div>
     </div>
@@ -939,9 +940,14 @@ let paid={};
 try{paid=JSON.parse(localStorage.getItem('cfapp_paid')||'{}')||{};}catch(e){paid={};}
 function savePaid(){try{localStorage.setItem('cfapp_paid',JSON.stringify(paid));}catch(e){}}
 function isPaid(name){return !!paid['n:'+normName(name)];}
-function togglePaid(name){
+function paidAmtChanged(name,curAmt){
+  const rec=paid['n:'+normName(name)];
+  if(!rec||typeof rec!=='object'||rec.amt===undefined||rec.amt===null)return false;
+  return rec.amt!==curAmt;
+}
+function togglePaid(name,amt){
   const k='n:'+normName(name);
-  if(paid[k])delete paid[k];else paid[k]=Date.now();
+  if(paid[k])delete paid[k];else paid[k]={t:Date.now(),amt:(amt===undefined?null:amt)};
   savePaid();
   try{if(people.length)sRender();}catch(e){}
   try{packRender();}catch(e){}
@@ -1133,7 +1139,8 @@ function sRender(){
       <td class="ship"><input type="number" value="${p.ship}" min="0" oninput="updShip(${i},this.value)"></td>
       <td class="total" id="ptotal-${i}">${fmtN(personTotal(p))}</td>
       <td class="act">
-        <button class="sumbtn paidbtn${isPaid(p.name)?' ison':''}" onclick="togglePaid(sP(${i}).name)">${isPaid(p.name)?'💰 โอนแล้ว ✓':'⬜ ยังไม่โอน'}</button>
+        <button class="sumbtn paidbtn${isPaid(p.name)?' ison':''}" onclick="togglePaid(sP(${i}).name,personTotal(sP(${i})))">${isPaid(p.name)?'💰 โอนแล้ว ✓':'⬜ ยังไม่โอน'}</button>
+        ${paidAmtChanged(p.name,personTotal(p))?`<span class="amtwarn" title="ยอดตอนนี้ไม่ตรงกับตอนกดโอนแล้ว — สินค้า/ยอดอาจถูกแก้ไขทีหลัง ลองเช็คอีกที">⚠️ ยอดเปลี่ยนหลังโอน</span>`:''}
         <button class="sumbtn" data-pkey="${esc(normName(p.name))}" onclick="copySummaryBtn(this)">💬 สรุปยอด</button>
         <button class="sumbtn" data-pkey="${esc(normName(p.name))}" onclick="copyCardBtn(this)" title="ก็อปการ์ดสรุปเป็นรูป ไปวางส่งลูกค้า">📸 การ์ดรูป</button>
         <button class="sumbtn" data-pkey="${esc(normName(p.name))}" onclick="copyRemindBtn(this)">⏰ ตามยอด</button>
@@ -1212,7 +1219,12 @@ function sImportSheet(){
   const skipped=[];
   raw.split(/\r?\n/).forEach(line=>{
     if(!line.trim())return;
-    const cells=line.split('\t').map(c=>c.trim()).filter(c=>c!=='');
+    let cells=line.split('\t').map(c=>c.trim()).filter(c=>c!=='');
+    if(cells.length<2){skipped.push(line.trim());return;}
+    // pull out a URL cell anywhere in the row (customer profile link), if present
+    let url='';
+    const uIdx=cells.findIndex(c=>/^https?:\/\//i.test(c));
+    if(uIdx>=1){ url=cells[uIdx]; cells=cells.filter((c,k)=>k!==uIdx); }
     if(cells.length<2){skipped.push(line.trim());return;}
     // last cell that looks like a pure number = price; everything before it besides the name = item
     let priceIdx=-1;
@@ -1229,7 +1241,8 @@ function sImportSheet(){
       item=cells.slice(1).join(' ').trim();
     }
     if(!name||!item){skipped.push(line.trim());return;}
-    lines.push([name,item,price].join('\t'));
+    const nameCell=url?`[${name}](${url})`:name;
+    lines.push([nameCell,item,price].join('\t'));
   });
   if(!lines.length){sToast('ไม่พบข้อมูลที่นำเข้าได้ — เช็ครูปแบบอีกที (ต้องมีอย่างน้อย ชื่อ กับ ชื่อสินค้า)');return;}
   const box=document.getElementById('s_input');
@@ -1533,6 +1546,7 @@ function packRender(){
         <input type="text" placeholder="เช่น TH0123456789" value="${esc(e.track)}" oninput="setTrack(${vi},this.value)">
         <button class="sumbtn" data-pkey="${esc(normName(e.name))}" onclick="copyTrackBtn(this)">📋 ก็อปแจ้งพัสดุ</button>
         <button class="sumbtn" data-pkey="${esc(normName(e.name))}" onclick="openTrackBtn(this)" title="เปิดหน้าเช็คสถานะไปรษณีย์ไทย">🚚</button>
+        <button class="sumbtn" data-pkey="${esc(normName(e.name))}" onclick="copyRemindBtn(this)" title="ก็อปข้อความตามยอดค้างโอน">⏰ ตามยอด</button>
         <button class="sumbtn" onclick="openChat(pE(${vi}).url,pE(${vi}).name)" title="เปิดหน้าแชท Messenger ของคนนี้">📨</button>
       </div>
     </div>`;
@@ -1852,9 +1866,10 @@ function roundSwitch(id){
   storeCurRound();
   ROUNDS.cur=id;saveRounds();
   applyState(Object.assign({},roundGet(id)||emptySnap()),false);
+  try{clearAll();}catch(e){}
   roundLabel();roundRenderList();
   queuePush();
-  sToast('เปิดรอบ "'+roundName(id)+'" แล้ว ✓');
+  sToast('เปิดรอบ "'+roundName(id)+'" แล้ว ✓ (ล้างแท็บก็อปชื่อให้ด้วย กันข้อมูลเก่าหลุดข้ามรอบ)');
 }
 function roundNew(){
   let nm=(document.getElementById('roundNewName').value||'').trim();
@@ -1863,10 +1878,11 @@ function roundNew(){
   const r={id:'r'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),name:nm,t:Date.now()};
   ROUNDS.list.push(r);ROUNDS.cur=r.id;saveRounds();
   applyState(emptySnap(),false);
+  try{clearAll();}catch(e){}
   document.getElementById('roundNewName').value='';
   roundLabel();roundRenderList();
   queuePush();
-  sToast('สร้างรอบ "'+nm+'" แล้ว — เริ่มว่างทั้งหมด พร้อมลงสินค้ารอบใหม่ ✓');
+  sToast('สร้างรอบ "'+nm+'" แล้ว — เริ่มว่างทั้งหมด (รวมแท็บก็อปชื่อ) พร้อมลงสินค้ารอบใหม่ ✓');
 }
 function roundDel(id){
   if(id===ROUNDS.cur){sToast('ลบรอบที่กำลังใช้อยู่ไม่ได้ — สลับไปรอบอื่นก่อน');return;}
