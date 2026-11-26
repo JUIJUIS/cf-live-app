@@ -168,10 +168,16 @@ td.name a:hover{text-decoration:underline}
 td.items{white-space:normal}
 .itline{display:flex;align-items:center;gap:9px;padding:2px 0}
 .itline+.itline{border-top:1px dashed #eef1f5}
-.itdel{margin-left:auto;flex:none;border:none;background:transparent;color:#c4cad4;font-size:.82rem;padding:2px 6px;border-radius:6px;cursor:pointer;opacity:0;transition:opacity .12s}
+.itdel{margin-left:auto;flex:none;border:1px solid #f3c2d2;background:#fff;color:#c0392b;font-size:.82rem;padding:2px 7px;border-radius:6px;cursor:pointer;opacity:.75;transition:opacity .12s}
 .itline:hover .itdel{opacity:1}
 .itdel:hover{background:#fbe3e0;color:#c0392b}
-@media (hover:none){.itdel{opacity:.55}}
+@media (hover:none){.itdel{opacity:.85}}
+.itadd{margin-top:6px;border:1px dashed var(--teal);background:#fff;color:var(--teal);border-radius:8px;padding:5px 11px;font:inherit;font-size:.8rem;font-weight:700;cursor:pointer}
+.itadd:hover{background:var(--teal-soft)}
+.addform{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px;padding:8px;background:var(--teal-soft);border-radius:9px}
+.addform input{border:1px solid var(--line);border-radius:7px;padding:6px 9px;font:inherit;font-size:16px;background:#fff}
+.addform input.an{flex:1;min-width:150px}
+.addform input.ap{width:84px;text-align:center}
 .itpic{width:38px;height:38px;flex:none;display:flex;align-items:center;justify-content:center}
 .itpic img{width:38px;height:38px;object-fit:cover;border-radius:7px;border:1px solid var(--line)}
 .itpic .nopic{color:#d5dbe4;font-size:1rem}
@@ -1134,7 +1140,9 @@ function sRender(){
       <td class="num">${people.indexOf(p)+1}</td>
       <td class="name">${p.url?`<a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a>`:esc(p.name)}<button class="namecopy" id="ncopy-${i}" onclick="sCopyName(${i})" title="ก็อปชื่อลูกค้า">📋</button>${p.items.length>1?`<span class="multi-tag">${p.items.length} รายการ</span>`:''}</td>
       <td class="items">${p.items.map((it,j)=>`
-        <div class="itline"><span class="itpic" data-code="${esc(itemCode(it.name))}"></span><span class="ittext">${esc(it.name)}</span><button class="itdel" onclick="sDeleteItem(${people.indexOf(p)},${j})" title="ลบรายการนี้">🗑</button></div>`).join('')}</td>
+        <div class="itline"><span class="itpic" data-code="${esc(itemCode(it.name))}"></span><span class="ittext">${esc(it.name)}</span><button class="itdel" onclick="sDeleteItem(${people.indexOf(p)},${j})" title="ลบรายการนี้">🗑 ลบ</button></div>`).join('')}${sAddOpen===normName(p.name)?`
+        <div class="addform"><input class="an" id="sAddName" type="text" placeholder="ชื่อสินค้า เช่น A12 เสื้อ" onkeydown="if(event.key==='Enter')sAddItem(${people.indexOf(p)})"><input class="ap" id="sAddPrice" type="number" min="0" placeholder="ราคา" onkeydown="if(event.key==='Enter')sAddItem(${people.indexOf(p)})"><button class="sumbtn" onclick="sAddItem(${people.indexOf(p)})">✓ เพิ่ม</button><button class="sumbtn" onclick="sAddToggle(${people.indexOf(p)})">ปิด</button></div>`
+        :`<button class="itadd" onclick="sAddToggle(${people.indexOf(p)})">+ เพิ่มรายการ</button>`}</td>
       <td class="price">${fmtN(itemsSum(p))}</td>
       <td class="ship"><input type="number" value="${p.ship}" min="0" oninput="updShip(${i},this.value)"></td>
       <td class="total" id="ptotal-${i}">${fmtN(personTotal(p))}</td>
@@ -1254,6 +1262,36 @@ function sImportSheet(){
   let msg=`นำเข้าแล้ว ${lines.length} รายการ ✓ รวมกับข้อมูลเดิมแล้ว`;
   if(skipped.length)msg+=` (ข้าม ${skipped.length} บรรทัดที่อ่านไม่ออก)`;
   sToast(msg);
+}
+let sAddOpen=null;
+function sAddToggle(pi){
+  const p=people[pi]; if(!p)return;
+  const k=normName(p.name);
+  sAddOpen=(sAddOpen===k)?null:k;
+  sRender();
+  if(sAddOpen){const el=document.getElementById('sAddName');if(el){el.focus();el.scrollIntoView({block:'nearest'});}}
+}
+function sAddItem(pi){
+  const p=people[pi]; if(!p)return;
+  const name=(document.getElementById('sAddName').value||'').replace(/\s+/g,' ').trim();
+  const price=parseInt(document.getElementById('sAddPrice').value)||0;
+  if(!name){sToast('พิมพ์ชื่อสินค้าก่อนครับ');document.getElementById('sAddName').focus();return;}
+  // เขียนลงคลังข้อมูล (ต่อท้ายบรรทัดล่าสุดของคนนี้) เพื่อให้ปิด-เปิดแล้วยังอยู่
+  const box=document.getElementById('s_input');
+  const target=normName(p.name);
+  const lines=box.value.split(/\r?\n/).filter(l=>l.trim());
+  let last=-1;
+  lines.forEach((l,i)=>{if(normName(parseNameCell(l.split('\t')[0]).name)===target)last=i;});
+  const nameCell=p.url?`[${p.name}](${p.url})`:p.name;
+  const newLine=[nameCell,name,price||''].join('\t');
+  if(last>=0)lines.splice(last+1,0,newLine);else lines.push(newLine);
+  box.value=lines.join('\n');
+  savePool();
+  p.items.push({name:name,price:price});
+  sRender();
+  buildCodePanel();
+  sToast(`เพิ่ม "${name}" ให้ "${p.name}" แล้ว ✓`);
+  const el=document.getElementById('sAddName');if(el)el.focus();
 }
 function sDeleteItem(pi,ii){
   const p=people[pi]; if(!p||!p.items[ii])return;
